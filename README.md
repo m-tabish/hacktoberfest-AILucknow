@@ -1,5 +1,25 @@
 # Report Navigator — Problem 05, Hacktoberfest Hack Day Lucknow
 
+## Judge Quick Start
+
+**Problem statement:** Find exact answers to questions about long government statistics reports, cite the supporting PDF page, and return `NOT_FOUND` when the report does not contain the answer. The system must handle dense tables and scanned pages without relying on preloaded answers.
+
+**Architecture:** FastAPI exposes document and question endpoints. PDF ingestion extracts page text and tables, applies OCR to scanned pages, and stores searchable content. BM25 retrieval (with optional FAISS embeddings) finds relevant pages; exact table lookup and a configured LLM produce validated answers with page citations.
+![Report Navigator architecture diagram](<docs/diagram (1).png>)
+
+
+
+**Live API and interactive docs:** [https://hacktoberfest-ailucknow.onrender.com/docs](https://hacktoberfest-ailucknow.onrender.com/docs)
+
+**Try it in the API docs:**
+
+1. Open the live docs and expand **POST `/documents`**.
+2. Choose a PDF in the `file` upload field and click **Execute**. The response includes a `doc_id`.
+3. Wait for ingestion to finish by checking **GET `/documents/{doc_id}`** until `status` is `ready`.
+4. Expand **POST `/documents/{doc_id}/ask`** for one question, or **POST `/documents/{doc_id}/batch`** for multiple questions. Paste the returned `doc_id` into the path field and submit the request body.
+
+For batch JSONL uploads, use **POST `/documents/{doc_id}/batch/jsonl`**. Each line must contain `id` and `question`.
+
 A RAG system that answers questions about a long government statistics report
 and **cites the PDF page** every answer comes from. Built for the hidden
 evaluation setup: it ingests *any* new report PDF at runtime (including pages

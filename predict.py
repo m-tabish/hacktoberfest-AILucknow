@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline scoring entry point for Report Navigator.
+"""Gemini-backed scoring entry point for Report Navigator.
 
 Usage: python predict.py --pdf report.pdf --questions questions.jsonl --output answers.jsonl
 """
@@ -62,7 +62,7 @@ def _validate_answers(answers: list, questions: list, page_count: int) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Offline Report Navigator prediction")
+    parser = argparse.ArgumentParser(description="Gemini-backed Report Navigator prediction")
     parser.add_argument("--pdf", required=True, help="Report PDF to index for this run")
     parser.add_argument("--questions", required=True, help="Input JSONL with id and question")
     parser.add_argument("--output", required=True, help="Destination answers JSONL")
@@ -75,12 +75,7 @@ def main() -> int:
     try:
         _validate_paths(pdf_path, questions_path, output_path)
 
-        # Set isolation before importing project modules; config.py loads .env.
-        os.environ["REPORT_NAVIGATOR_OFFLINE"] = "1"
-        os.environ["ENABLE_EMBEDDINGS"] = "0"
-        os.environ["LLM_API_KEY"] = ""
-        os.environ["HF_HUB_OFFLINE"] = "1"
-        os.environ["TRANSFORMERS_OFFLINE"] = "1"
+        # Set the per-run data directory before importing project modules.
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         questions = None
         answers = None
