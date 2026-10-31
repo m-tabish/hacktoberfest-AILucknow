@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="A visual, evidence-based guide to Report Navigator's architecture, technology, evaluation, and limitations.">
+  <title>Report Navigator — Engineering Guide</title>
+  <style>
+    :root {
+      --ink: #182522;
+      --muted: #586862;
+      --paper: #f4f3ed;
+      --surface: #fffefa;
+      --line: #d9ded6;
+      --green: #126c5c;
+      --green-soft: #e4f1eb;
+      --orange: #b64d2d;
+      --orange-soft: #f8e9df;
+      --blue: #285d79;
+      --blue-soft: #e8f0f4;
+      --rail: #192b28;
+      --rail-text: #eaf1ec;
+      --rail-muted: #a9bbb2;
+      --mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      --serif: Iowan Old Style, "Palatino Linotype", "Book Antiqua", Georgia, serif;
+      --measure: 74ch;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 2rem; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.65;
+    }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    a { color: var(--green); text-underline-offset: .2em; }
+    a:hover { color: var(--orange); }
+    :focus-visible { outline: 3px solid #e58a48; outline-offset: 3px; }
+    ::selection { background: #c9e4d7; color: #10211b; }
+
+    .reading-progress {
+      position: fixed; inset: 0 auto auto 0; z-index: 20;
+      width: 100%; height: 3px; background: transparent;
+    }
+    .reading-progress span { display: block; width: 0; height: 100%; background: #e58a48; }
+    .layout { min-height: 100vh; display: grid; grid-template-columns: 264px minmax(0, 1fr); }
+
+    .rail {
+      position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+      padding: 30px 20px 24px; background: var(--rail); color: var(--rail-text);
+      display: flex; flex-direction: column; gap: 24px;
+    }
+    .brand { display: flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; }
+    .brand-mark { width: 35px; height: 35px; flex: 0 0 auto; }
+    .brand strong { display: block; font-size: 14px; letter-spacing: .025em; }
+    .brand small { color: var(--rail-muted); font-size: 12px; }
+    .rail-label { margin: 0 0 8px; color: var(--rail-muted); font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+    .toc { display: grid; gap: 3px; }
+    .toc a {
+      padding: 7px 10px; border-radius: 5px; color: #ced9d3; text-decoration: none;
+      font-size: 13px; line-height: 1.35; transition: background .15s ease, color .15s ease;
+    }
+    .toc a:hover, .toc a[aria-current="location"] { background: #29443d; color: #fff; }
+    .toc a[hidden] { display: none; }
+    .rail-tools { margin-top: auto; display: grid; gap: 8px; }
+    .rail-tools button, .rail-tools a {
+      width: 100%; display: flex; justify-content: flex-start; align-items: center; gap: 9px;
+      padding: 9px 10px; border: 1px solid #3a514a; border-radius: 5px;
+      background: transparent; color: var(--rail-text); text-decoration: none; font-size: 12px;
+    }
+    .rail-tools button:hover, .rail-tools a:hover { background: #29443d; color: white; }
+    .rail-note { color: var(--rail-muted); font-size: 12px; line-height: 1.5; }
+
+    main { min-width: 0; }
+    .topbar {
+      position: sticky; top: 3px; z-index: 10; display: flex; align-items: center; gap: 16px;
+      padding: 12px clamp(20px, 5vw, 72px); border-bottom: 1px solid var(--line);
+      background: rgb(244 243 237 / 94%); backdrop-filter: blur(8px);
+    }
+    .search-wrap { position: relative; width: min(400px, 55vw); }
+    .search-wrap span { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; }
+    #section-search {
+      width: 100%; padding: 9px 12px 9px 36px; border: 1px solid var(--line); border-radius: 5px;
+      background: var(--surface); color: var(--ink); font-size: 12px;
+    }
+    .topbar-note { margin-left: auto; color: var(--muted); font-size: 12px; }
+    .mobile-brand, .mobile-nav { display: none; }
+
+    article { width: min(100%, 1180px); margin: 0 auto; padding: 0 clamp(20px, 5vw, 72px) 88px; }
+    .hero { padding: clamp(42px, 8vw, 96px) 0 38px; border-bottom: 1px solid var(--line); }
+    .eyebrow { display: flex; align-items: center; gap: 9px; margin: 0 0 18px; color: var(--green); font-size: 12px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    .eyebrow::before { content: ""; width: 26px; height: 1px; background: currentColor; }
+    h1, h2, h3 { color: var(--ink); }
+    h1 { max-width: 760px; margin: 0; color: var(--ink); font-family: var(--serif); font-size: 72px; font-weight: 500; line-height: .99; letter-spacing: -.035em; }
+    .hero-copy { max-width: 690px; margin: 24px 0 0; color: #43544d; font: 18px/1.65 var(--serif); }
+    .hero-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 25px; color: var(--muted); font-size: 12px; }
+    .hero-meta span { display: inline-flex; align-items: center; gap: 7px; }
+    .hero-meta span::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+
+    .section { padding: 48px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 70px; }
+    .section-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px; align-items: end; margin-bottom: 24px; }
+    .section-head h2 { max-width: var(--measure); margin: 0; color: var(--ink); font-family: var(--serif); font-size: 38px; font-weight: 500; line-height: 1.12; letter-spacing: -.025em; }
+    .section-head p { grid-column: 1; max-width: var(--measure); margin: 10px 0 0; color: var(--muted); }
+    .section-index { align-self: start; color: #64736c; font: 13px var(--mono); }
+    h3 { margin: 25px 0 9px; font: 600 18px/1.3 var(--sans); }
+    p { max-width: var(--measure); margin: 10px 0; }
+    .lede { color: #40524a; font: 18px/1.62 var(--serif); }
+    .small { color: var(--muted); font-size: 13px; }
+    .fine { color: var(--muted); font-size: 12px; }
+    .note { padding: 13px 16px; border: 1px solid #d4e2da; background: var(--green-soft); color: #25473d; font-size: 13px; }
+    .note.warning { border-color: #e6c8b5; background: var(--orange-soft); color: #633a28; }
+    .note.info { border-color: #c8dce6; background: var(--blue-soft); color: #29495a; }
+    code, pre { font-family: var(--mono); }
+    code { padding: .12em .35em; border-radius: 3px; background: #e9ebe5; font-size: .88em; }
+    pre { overflow: auto; margin: 12px 0; padding: 17px; border-radius: 5px; background: #1e2c29; color: #eff6ef; font-size: 12px; line-height: 1.6; }
+    pre code { padding: 0; background: transparent; color: inherit; }
+
+    .snapshot-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(260px, .7fr); gap: 28px; align-items: start; }
+    .chart-panel { padding: 21px 22px; border: 1px solid var(--line); background: var(--surface); }
+    .chart-title { margin: 0 0 3px; font: 600 15px var(--sans); }
+    .chart-subtitle { margin: 0 0 20px; color: var(--muted); font-size: 12px; }
+    .mix-track { display: flex; height: 20px; overflow: hidden; border-radius: 3px; background: #e4e9e2; }
+    .mix-numeric { width: 90%; background: var(--green); }
+    .mix-notfound { width: 10%; background: var(--orange); }
+    .legend { display: flex; flex-wrap: wrap; gap: 14px 20px; margin-top: 13px; color: var(--muted); font-size: 12px; }
+    .legend span { display: inline-flex; align-items: center; gap: 7px; }
+    .swatch { width: 9px; height: 9px; border-radius: 2px; background: var(--green); }
+    .swatch.orange { background: var(--orange); }
+    .bar-chart { display: grid; gap: 13px; }
+    .bar-row { display: grid; grid-template-columns: minmax(96px, 130px) minmax(70px, 1fr) 70px; gap: 10px; align-items: center; font-size: 12px; }
+    .bar-label { color: #43534d; }
+    .bar-track { height: 8px; background: #e8ebe5; }
+    .bar-fill { display: block; height: 100%; min-width: 2px; background: var(--green); }
+    .bar-fill.orange { background: var(--orange); }
+    .bar-value { color: var(--ink); font: 12px var(--mono); text-align: right; }
+    .result-unknown { display: flex; align-items: center; gap: 12px; margin-top: 18px; padding: 14px 15px; border: 1px dashed #b9896d; background: #fcf6f0; }
+    .result-unknown b { color: #7a4227; font-size: 12px; }
+    .result-unknown p { margin: 2px 0 0; color: #705b4e; font-size: 12px; }
+    .status-dot { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: var(--orange); }
+
+    .diagram { margin: 26px 0; padding: 21px; border: 1px solid var(--line); background: var(--surface); }
+    .diagram figcaption { margin-top: 14px; color: var(--muted); font-size: 12px; }
+    .flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 26px 24px; }
+    .flow-node { position: relative; min-height: 105px; padding: 13px 14px; border: 1px solid #cbd7cf; background: #f7faf6; }
+    .flow-node::after { content: "→"; position: absolute; top: 34px; right: -22px; color: #71867a; font-size: 19px; }
+    .flow-node:nth-child(4n)::after, .flow-node.last::after { content: ""; }
+    .flow-node .node-tag { display: block; margin-bottom: 7px; color: var(--green); font: 12px var(--mono); text-transform: uppercase; }
+    .flow-node strong { display: block; font-size: 12px; line-height: 1.35; }
+    .flow-node small { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+    .flow-node.model { border-color: #cfad92; background: #fbf1e9; }
+    .flow-node.model .node-tag { color: var(--orange); }
+    .flow-node.store { background: var(--blue-soft); border-color: #c4d8e3; }
+    .flow-node.store .node-tag { color: var(--blue); }
+
+    details { border-top: 1px solid var(--line); }
+    details:last-child { border-bottom: 1px solid var(--line); }
+    summary { display: flex; align-items: baseline; gap: 12px; padding: 14px 2px; color: var(--ink); font-weight: 650; cursor: pointer; list-style: none; }
+    summary::-webkit-details-marker { display: none; }
+    summary::before { content: "+"; width: 18px; color: var(--green); font: 18px var(--mono); }
+    details[open] > summary::before { content: "−"; }
+    .detail-body { padding: 0 4px 19px 32px; color: #43534d; font-size: 14px; }
+    .detail-body p:first-child { margin-top: 0; }
+    .detail-body ul { max-width: var(--measure); padding-left: 19px; }
+    .detail-body li { margin: 5px 0; }
+
+    .tech-table, .metric-table, .file-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .tech-table th, .metric-table th, .file-table th { padding: 11px; background: #e8eee8; color: #34463f; text-align: left; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+    .tech-table td, .metric-table td, .file-table td { padding: 11px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    .tech-table td:first-child { width: 18%; font-weight: 650; }
+    .tech-table td:nth-child(2) { width: 23%; color: var(--green); font-weight: 600; }
+    .table-scroll { overflow-x: auto; padding: 8px; border: 1px solid var(--line); background: var(--surface); }
+    .metric-table { min-width: 620px; }
+    .formula { display: inline-block; padding: 7px 10px; border: 1px solid var(--line); background: #f3f4ef; color: #31443b; font: 12px var(--mono); }
+    .assurance { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: 23px 0; border: 1px solid var(--line); background: var(--surface); }
+    .assurance-step { position: relative; min-height: 130px; padding: 16px; border-right: 1px solid var(--line); }
+    .assurance-step:last-child { border-right: 0; }
+    .assurance-step .step-no { color: var(--orange); font: 12px var(--mono); }
+    .assurance-step strong { display: block; margin: 9px 0 4px; font-size: 13px; }
+    .assurance-step p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .priority-list { display: grid; grid-template-columns: 110px minmax(0, 1fr); border-top: 1px solid var(--line); }
+    .priority-list dt, .priority-list dd { margin: 0; padding: 13px 9px; border-bottom: 1px solid var(--line); }
+    .priority-list dt { color: var(--orange); font: 12px var(--mono); }
+    .priority-list dd { color: #43534d; font-size: 13px; }
+    .footer { padding: 32px 0 0; color: var(--muted); font-size: 12px; }
+    .footer strong { color: var(--ink); }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 220px minmax(0, 1fr); }
+      .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .flow-node:nth-child(2n)::after, .flow-node.last::after { content: ""; }
+      .flow-node:nth-child(4n)::after { content: "→"; }
+      .snapshot-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 58px; }
+      .section-head h2 { font-size: 34px; }
+    }
+    @media (max-width: 660px) {
+      .layout { display: block; }
+      .rail { display: none; }
+      .mobile-nav { position: sticky; top: 3px; z-index: 11; display: block; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--paper); }
+      .mobile-nav details { border: 0; }
+      .mobile-nav summary { padding: 5px 0; font-size: 12px; }
+      .mobile-nav .toc { max-height: 55vh; overflow: auto; padding: 6px 0 10px; }
+      .mobile-nav .toc a { color: var(--ink); }
+      .mobile-nav .toc a:hover, .mobile-nav .toc a[aria-current="location"] { color: #fff; }
+      .topbar { top: 44px; padding: 9px 16px; }
+      .topbar-note { display: none; }
+      .search-wrap { width: 100%; }
+      article { padding: 0 17px 60px; }
+      .hero { padding-top: 43px; }
+      .hero-copy { font-size: 16px; }
+      h1 { font-size: 44px; }
+      .section-head h2 { font-size: 30px; }
+      .section { padding: 36px 0; }
+      .section-head { grid-template-columns: 1fr; gap: 7px; }
+      .section-index { grid-row: 1; }
+      .section-head p { grid-column: 1; }
+      .flow { grid-template-columns: 1fr; gap: 10px; }
+      .flow-node { min-height: 0; }
+      .flow-node::after, .flow-node:nth-child(2n)::after, .flow-node:nth-child(4n)::after { content: "↓"; top: auto; right: 12px; bottom: -19px; z-index: 1; }
+      .flow-node.last::after { content: ""; }
+      .assurance { grid-template-columns: repeat(2, 1fr); }
+      .assurance-step:nth-child(2) { border-right: 0; }
+      .assurance-step:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+      .bar-row { grid-template-columns: 95px minmax(50px, 1fr) 57px; gap: 7px; }
+      .diagram { padding: 13px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+    }
+    @media print {
+      :root { --paper: #fff; --surface: #fff; }
+      .layout { display: block; }
+      .rail, .topbar, .mobile-nav, .reading-progress { display: none !important; }
+      article { width: 100%; padding: 0; }
+      .hero { padding-top: 20px; }
+      details:not([open]) > :not(summary) { display: block !important; }
+      details > summary::before { display: none; }
+      a { color: inherit; text-decoration: none; }
+      .section { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="reading-progress" aria-hidden="true"><span id="progress-fill"></span></div>
+  <div class="layout">
+    <aside class="rail" aria-label="Guide navigation">
+      <a class="brand" href="#top">
+        <svg class="brand-mark" viewBox="0 0 40 40" role="img" aria-label="Report Navigator mark">
+          <rect x="1" y="1" width="38" height="38" rx="8" fill="#d4e8da"/>
+          <path d="M10 11h20M10 17h13M10 23h20M10 29h12" stroke="#126c5c" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="28" cy="17" r="3" fill="#b64d2d"/>
+        </svg>
+        <span><strong>REPORT NAVIGATOR</strong><small>Engineering guide</small></span>
+      </a>
+      <div>
+        <p class="rail-label">Contents</p>
+        <nav class="toc" aria-label="Sections">
+          <a href="#overview">Project at a glance</a>
+          <a href="#snapshot">Dataset and ingestion snapshot</a>
+          <a href="#architecture">Architecture diagram</a>
+          <a href="#ingestion">PDF ingestion</a>
+          <a href="#answering">Question to answer</a>
+          <a href="#stack">Technology choices</a>
+          <a href="#metrics">Evaluation metrics</a>
+          <a href="#accuracy">Accuracy and evidence</a>
+          <a href="#limits">Limitations and roadmap</a>
+          <a href="#run">Run and configure</a>
+          <a href="#files">Code map</a>
+        </nav>
+      </div>
+      <div class="rail-tools">
+        <button type="button" id="expand-all">＋ Expand all sections</button>
+        <button type="button" id="collapse-all">− Collapse all sections</button>
+        <button type="button" id="print-page">Print / save PDF</button>
+        <div class="rail-note">Standalone HTML · CSS and JavaScript are embedded · no external libraries</div>
+      </div>
+    </aside>
+
+    <main id="top">
+      <nav class="mobile-nav" aria-label="Mobile section navigation">
+        <details>
+          <summary>Jump to a section</summary>
+          <nav class="toc">
+            <a href="#overview">Project at a glance</a><a href="#snapshot">Dataset and ingestion snapshot</a>
+            <a href="#architecture">Architecture diagram</a><a href="#ingestion">PDF ingestion</a>
+            <a href="#answering">Question to answer</a><a href="#stack">Technology choices</a>
+            <a href="#metrics">Evaluation metrics</a><a href="#accuracy">Accuracy and evidence</a>
+            <a href="#limits">Limitations and roadmap</a><a href="#run">Run and configure</a><a href="#files">Code map</a>
+          </nav>
+        </details>
+      </nav>
+      <div class="topbar">
+        <label class="search-wrap"><span aria-hidden="true">⌕</span><input id="section-search" type="search" placeholder="Find a section or term…" autocomplete="off" aria-label="Filter guide sections"></label>
+        <div class="topbar-note">Read guide · Snapshot at commit c697102</div>
+      </div>
+
+      <article>
+        <header class="hero" id="overview" data-section>
+          <p class="eyebrow">System map · Evidence · Next steps</p>
+          <h1>How Report Navigator turns a PDF into an answer.</h1>
+          <p class="hero-copy">A visual guide to the complete pipeline: what each component does, why it is here, how answers are checked, and where the system still needs stronger evidence.</p>
+          <div class="hero-meta">
+            <span>Python + Streamlit</span><span>SQLite-backed report store</span><span>Gemini answer path</span><span>Current numeric-answer scope</span>
+          </div>
+          <div class="note info" style="margin-top:26px"><strong>Scope note.</strong> The current answer contract returns an integer count or <code>NOT_FOUND</code>. It does not identify people in photos, explain graphs visually, or return open-ended names. Page images are rendered for citation viewing but are not sent to Gemini.</div>
+        </header>
+
+        <section class="section" id="snapshot" data-section>
+          <div class="section-head"><div><h2>What is in the current workspace?</h2><p>The counts below describe the supplied report and its local ingestion, not answer accuracy.</p></div><span class="section-index">DATA</span></div>
+          <div class="snapshot-grid">
+            <div class="chart-panel">
+              <h3 class="chart-title">Gold question mix</h3><p class="chart-subtitle">50 supplied questions · 45 numeric answers · 5 expected <code>NOT_FOUND</code></p>
+              <div class="mix-track" role="img" aria-label="45 numeric questions, 90 percent; 5 NOT_FOUND questions, 10 percent"><span class="mix-numeric"></span><span class="mix-notfound"></span></div>
+              <div class="legend"><span><i class="swatch"></i>45 numeric · 90%</span><span><i class="swatch orange"></i>5 NOT_FOUND · 10%</span></div>
+              <p class="fine">This chart summarizes the gold file’s answer types. It does not show the app’s score.</p>
+            </div>
+            <div class="chart-panel">
+              <h3 class="chart-title">Local ingestion snapshot</h3><p class="chart-subtitle">Each bar is scaled to this list’s maximum; units differ.</p>
+              <div class="bar-chart" role="img" aria-label="272 PDF pages, 7352 chunks, 6333 parsed table rows, 170 pages with table rows, zero OCR pages">
+                <div class="bar-row"><span class="bar-label">PDF pages</span><span class="bar-track"><i class="bar-fill" style="width:3.7%"></i></span><b class="bar-value">272</b></div>
+                <div class="bar-row"><span class="bar-label">Search chunks</span><span class="bar-track"><i class="bar-fill" style="width:100%"></i></span><b class="bar-value">7,352</b></div>
+                <div class="bar-row"><span class="bar-label">Parsed rows</span><span class="bar-track"><i class="bar-fill" style="width:86.1%"></i></span><b class="bar-value">6,333</b></div>
+                <div class="bar-row"><span class="bar-label">Pages with rows</span><span class="bar-track"><i class="bar-fill" style="width:2.3%"></i></span><b class="bar-value">170</b></div>
+                <div class="bar-row"><span class="bar-label">OCR pages</span><span class="bar-track"><i class="bar-fill orange" style="width:0%"></i></span><b class="bar-value">0</b></div>
+              </div>
+              <p class="fine">Snapshot from the local SQLite database; another PDF will produce different counts.</p>
+            </div>
+          </div>
+          <div class="result-unknown"><span class="status-dot" aria-hidden="true"></span><div><b>Answer benchmark score: not available</b><p>No saved batch output or computed exact-match/page-accuracy report was found in the workspace. No accuracy percentage is claimed here.</p></div></div>
+        </section>
+
+        <section class="section" id="architecture" data-section>
+          <div class="section-head"><div><h2>Two paths share one evidence store.</h2><p>Ingestion prepares searchable text and rows. Question answering first tries exact structured data, then retrieves pages and asks Gemini when needed.</p></div><span class="section-index">FLOW</span></div>
+          <figure class="diagram">
+            <div class="flow" aria-label="Architecture flow diagram">
+              <div class="flow-node"><span class="node-tag">Input</span><strong>PDF upload or batch file</strong><small>Streamlit UI or run_batch.py</small></div>
+              <div class="flow-node"><span class="node-tag">Read</span><strong>Coordinate-sorted text</strong><small>PyMuPDF; OCR fallback for sparse image pages</small></div>
+              <div class="flow-node"><span class="node-tag">Structure</span><strong>Rows, pages, and chunks</strong><small>Table parsing plus page/narrative/row chunks</small></div>
+              <div class="flow-node store"><span class="node-tag">Store</span><strong>SQLite + local indexes</strong><small>BM25 always; FAISS embeddings optional</small></div>
+              <div class="flow-node"><span class="node-tag">Question</span><strong>Entity, metric, year</strong><small>Keyword rules and fuzzy matching against row labels</small></div>
+              <div class="flow-node"><span class="node-tag">Exact first</span><strong>Mapped cell lookup</strong><small>Return only if the row and metric/year column agree</small></div>
+              <div class="flow-node"><span class="node-tag">Find evidence</span><strong>Rank candidate pages</strong><small>BM25 plus optional vector similarity and entity bonuses</small></div>
+              <div class="flow-node model last"><span class="node-tag">Generate</span><strong>Gemini JSON response</strong><small>Only extracted text from the top five pages is sent</small></div>
+            </div>
+            <figcaption>The validator checks the JSON shape, numeric value, and citation page. It does not yet prove that the number is under the correct table column.</figcaption>
+          </figure>
+          <details><summary>What happens when a stage cannot proceed?</summary><div class="detail-body"><ul><li>Missing optional embeddings or FAISS: continue with BM25.</li><li>Entity not found in text or stored row labels: abstain before calling Gemini.</li><li>No API key: return a low-confidence fallback instead of fabricating a value.</li><li>Malformed output or a number/page that fails validation: retry once with the same page context, then show the failure.</li></ul></div></details>
+        </section>
+
+        <section class="section" id="ingestion" data-section>
+          <div class="section-head"><div><h2>PDF ingestion: recover text before interpreting it.</h2><p>The ingestion boundary converts each page into reusable evidence. It is not a vision-understanding pipeline.</p></div><span class="section-index">01 · INGEST</span></div>
+          <details open><summary>1. Extract page text and layout</summary><div class="detail-body"><p><code>src/ingest/pdf_loader.py</code> reads words with coordinates and sorts them top-to-bottom, then left-to-right. The page text layer is preferred because it preserves exact digits better than OCR. PyMuPDF also renders page images for the citation viewer.</p><p><strong>Why:</strong> some report PDFs store words in a reading order that does not match the visual page. Coordinates help restore readable lines.</p></div></details>
+          <details><summary>2. Use OCR only as a fallback</summary><div class="detail-body"><p><code>src/ingest/ocr.py</code> runs Tesseract when a page has fewer than 50 native text characters and contains an embedded image. OCR output becomes plain searchable text.</p><p><strong>Limit:</strong> OCR can confuse digits and does not preserve the table grid or graph relationships. A scanned chart may yield labels, not a trustworthy series of values.</p></div></details>
+          <details><summary>3. Extract table rows, with cautious headers</summary><div class="detail-body"><p><code>src/ingest/table_extract.py</code> tries PyMuPDF <code>find_tables()</code> on number-dense pages, then falls back to numeric rows from sorted text lines. Row values are retained even when the header cannot be mapped confidently into named columns.</p><p><strong>Why this matters:</strong> the fallback row is useful for retrieval and Gemini context, but a list of values is not enough for a safe deterministic answer. The question may target a particular year, category, or sub-column.</p></div></details>
+          <details><summary>4. Chunk and index the document</summary><div class="detail-body"><ul><li><strong>Page chunks</strong> preserve the broad page context.</li><li><strong>Narrative chunks</strong> are about 800 characters with 120 characters of overlap.</li><li><strong>Table-row chunks</strong> include the row label, title, and either mapped values or an ordered value list.</li></ul><p>SQLite stores documents, page text, row data, chunks, and QA history. BM25 is built for every document; optional BGE embeddings and FAISS cover narrative and table-row chunks.</p></div></details>
+        </section>
+
+        <section class="section" id="answering" data-section>
+          <div class="section-head"><div><h2>Question answering: deterministic first, Gemini second.</h2><p>This is a retrieval-augmented generation system. Gemini does not search the entire PDF by itself; the app chooses page text and sends that context.</p></div><span class="section-index">02 · ANSWER</span></div>
+          <details open><summary>Context extraction</summary><div class="detail-body"><p><code>entity.py</code> identifies common metrics, years, supported subject phrases, and entity labels found in stored table rows. RapidFuzz helps match spelling variants. This is rule-based question parsing, not a general-purpose language understanding layer.</p></div></details>
+          <details><summary>Hybrid page retrieval</summary><div class="detail-body"><p><code>hybrid_search.py</code> scores chunks with a small in-repository BM25 implementation, optionally adds FAISS similarity, aggregates scores by page, and boosts pages containing the entity and its table row. Singular/plural token variants help align question wording with report wording.</p><p>The top five candidate pages are passed forward by default. The prompt includes at most 6,000 characters from each page. If the relevant page or its headers do not make this cut, Gemini cannot use them.</p></div></details>
+          <details><summary>Gemini request, response, and trace</summary><div class="detail-body"><p><code>llm_client.py</code> makes a standard-library HTTP request to the OpenAI-compatible endpoint in <code>.env</code>. The answer trace in the UI shows endpoint, model, request messages, status, and raw response/error. The API key is excluded, but page text is included because that is what the provider receives.</p><p>Current local configuration uses Gemini; source defaults fall back to a Groq endpoint if no override is provided. Model timeouts and model availability depend on provider/network state.</p></div></details>
+          <details><summary>Output validation and citation</summary><div class="detail-body"><p>The active answer schema is integer string, page number, and confidence, or <code>NOT_FOUND</code>. The validator strips commas and confirms the number appears somewhere in a candidate page. It may move the page citation to another candidate page containing that number.</p><p><strong>Not yet validated:</strong> that the number is at the intersection of the requested entity row and the intended year/category column.</p></div></details>
+          <div class="note warning"><strong>Multimodal boundary.</strong> The model request contains text messages only. The saved page PNG is shown as a citation preview; it is not attached to Gemini. Questions about faces, chart shapes, or visual table layout need a separate multimodal request path.</div>
+        </section>
+
+        <section class="section" id="stack" data-section>
+          <div class="section-head"><div><h2>Technology choices and alternatives.</h2><p>The current stack favors local, inspectable parts and a small deployment footprint.</p></div><span class="section-index">STACK</span></div>
+          <div class="table-scroll">
+            <table class="tech-table"><thead><tr><th>Job</th><th>Used</th><th>Why it fits</th><th>Alternatives and trade-offs</th></tr></thead><tbody>
+              <tr><td>Application</td><td>Python</td><td>One language for PDF parsing, search, UI, and batch work.</td><td>Java or C# can add stricter application structure; Python has a faster document/ML iteration path.</td></tr>
+              <tr><td>PDF text/layout</td><td>PyMuPDF</td><td>Fast word coordinates, page rendering, and table detection.</td><td>pdfplumber is useful for table inspection; pypdf is lighter but has less layout/render support.</td></tr>
+              <tr><td>Scanned text</td><td>Tesseract + Pillow</td><td>Local and low-cost for pages with no usable text layer.</td><td>PaddleOCR/EasyOCR can improve some scripts/layouts; cloud OCR adds cost and sends documents to a provider.</td></tr>
+              <tr><td>Structured store</td><td>SQLite</td><td>Single file, no service to operate, enough for one report collection.</td><td>PostgreSQL is stronger for multi-user production concurrency; it does not solve header interpretation.</td></tr>
+              <tr><td>Keyword search</td><td>Custom BM25</td><td>Always available, local, exact names/years matter.</td><td>rank-bm25 is a library alternative; OpenSearch adds advanced querying and service operations.</td></tr>
+              <tr><td>Vector search</td><td>FAISS + Sentence Transformers (optional)</td><td>Local semantic matching without a vector server.</td><td>Chroma/pgvector simplify metadata workflows; hosted vectors add cost and data transfer.</td></tr>
+              <tr><td>Embeddings</td><td>BAAI/bge-small-en-v1.5</td><td>Small cached English model; stays local.</td><td>Other local models may handle multilingual reports better; API embeddings simplify install but transmit text.</td></tr>
+              <tr><td>Answer model</td><td>Gemini via OpenAI-compatible HTTP</td><td>Endpoint/model can change through environment config; no OpenAI SDK dependency.</td><td>Google GenAI SDK exposes native multimodal and Gemini-specific features; that is the better route for page-image questions.</td></tr>
+              <tr><td>User interface</td><td>Streamlit</td><td>Fast Python upload, chat, progress, and batch UI.</td><td>FastAPI + React offers finer UI and API boundaries at more implementation/hosting cost.</td></tr>
+              <tr><td>Validation</td><td>Python + regex</td><td>Simple and transparent for an integer answer contract.</td><td>Pydantic/JSON Schema help for richer data structures, but do not prove the answer uses the right table cell.</td></tr>
+            </tbody></table>
+          </div>
+          <p class="small">Core requirements: PyMuPDF, Streamlit, python-dotenv, RapidFuzz, pandas. Optional requirements: Sentence Transformers, FAISS, pytesseract, Pillow, pdfplumber. Tesseract also needs its system executable.</p>
+        </section>
+
+        <section class="section" id="metrics" data-section>
+          <div class="section-head"><div><h2>Metrics: what is measured and what is missing?</h2><p><code>evaluate.py</code> compares a batch output against gold answers. No score file exists in this workspace yet.</p></div><span class="section-index">MEASURE</span></div>
+          <div class="table-scroll"><table class="metric-table"><thead><tr><th>Metric</th><th>Definition in this project</th><th>What it cannot tell us</th></tr></thead><tbody>
+            <tr><td>Exact match</td><td>Exact answer-string matches / all gold questions.</td><td>No partial credit; a correct number with formatting mismatch can fail.</td></tr>
+            <tr><td>Page accuracy</td><td>For numeric gold items answered numerically, predicted page is in the gold page set.</td><td>Page may be correct while the wrong column/number was chosen. NOT_FOUND and missing answers are excluded from this denominator.</td></tr>
+            <tr><td>NOT_FOUND precision</td><td>Correct abstentions / all predicted abstentions.</td><td>Does not measure how many answerable questions were missed.</td></tr>
+            <tr><td>NOT_FOUND recall</td><td>Correct abstentions / all gold NOT_FOUND items.</td><td>Can look good if the model over-abstains; read with precision and exact match.</td></tr>
+          </tbody></table></div>
+          <h3>How a full evaluation should be read</h3>
+          <p>Exact match covers the answer; page accuracy covers citation location; NOT_FOUND precision/recall cover abstention behavior. Together they are useful but still miss table-cell correctness and retrieval misses.</p>
+          <div class="note info"><strong>Recommended next metrics:</strong> retrieval Recall@5 (did the gold page reach Gemini?), answer coverage, row-and-column evidence accuracy, latency/cost per question, and confidence calibration on held-out questions.</div>
+        </section>
+
+        <section class="section" id="accuracy" data-section>
+          <div class="section-head"><div><h2>How sure are we that an answer is right?</h2><p>Confidence should come from evidence checks and evaluation, not from a model’s self-rating alone.</p></div><span class="section-index">EVIDENCE</span></div>
+          <div class="assurance" aria-label="Four layers of answer evidence">
+            <div class="assurance-step"><span class="step-no">A</span><strong>Value exists</strong><p>Validator sees the number somewhere on a candidate page.</p></div>
+            <div class="assurance-step"><span class="step-no">B</span><strong>Page is eligible</strong><p>Citation is limited to pages sent to Gemini.</p></div>
+            <div class="assurance-step"><span class="step-no">C</span><strong>Cell is correct</strong><p>A reviewer aligns entity, year, measure, and category headers.</p></div>
+            <div class="assurance-step"><span class="step-no">D</span><strong>Score holds at scale</strong><p>Gold evaluation measures exact match and page accuracy.</p></div>
+          </div>
+          <p class="lede">The current validator proves A and part of B. It does not prove C. D is not available until a full batch is run and scored.</p>
+          <ul><li>Gemini confidence is not calibrated. An answer with confidence 1.0 can still be wrong.</li><li>Code assigns 0.95 to deterministic cell answers; that is a heuristic, not a measured probability.</li><li>LLM-returned <code>NOT_FOUND</code> confidence is capped at 0.5. The earlier entity-absent path currently uses 0.8.</li><li>Manual source inspection should compare the full table header hierarchy with the entity row, not just search for the number on the page.</li></ul>
+        </section>
+
+        <section class="section" id="limits" data-section>
+          <div class="section-head"><div><h2>Where to work next.</h2><p>Prioritized by how directly each gap affects answer reliability and supported question types.</p></div><span class="section-index">ROADMAP</span></div>
+          <dl class="priority-list">
+            <dt>First</dt><dd><strong>Run the full 50-question gold evaluation.</strong> Save the answers, metrics, model, date, and configuration. This establishes a real baseline.</dd>
+            <dt>First</dt><dd><strong>Make table headers machine-readable.</strong> Improve multi-row/grouped header mapping and validate the requested row/column intersection.</dd>
+            <dt>Next</dt><dd><strong>Measure retrieval Recall@5.</strong> Record when the gold page is missing from Gemini’s input, then improve ranking/context based on misses.</dd>
+            <dt>Next</dt><dd><strong>Strengthen OCR evidence.</strong> Detect low-quality OCR and avoid confident numeric answers from ambiguous digits/layout.</dd>
+            <dt>Later</dt><dd><strong>Add visual questions deliberately.</strong> Send relevant rendered pages as image input and expand the answer/validator contract for descriptions and names.</dd>
+            <dt>Later</dt><dd><strong>Calibrate confidence and control latency.</strong> Use held-out results, record request timings/retries, and tune timeouts against actual measurements.</dd>
+          </dl>
+          <p class="note warning" style="margin-top:20px"><strong>Known manual example:</strong> the local report’s page 241 has a Kollam two-wheeler row with 124 persons killed in 2023. An earlier run abstained despite the evidence. Treat this as a known retrieval/table-header failure; the whole-dataset impact has not been measured.</p>
+        </section>
+
+        <section class="section" id="run" data-section>
+          <div class="section-head"><div><h2>Run, configure, and score.</h2><p>All credentials stay in a local ignored <code>.env</code>. Do not share a trace without reviewing the page text it contains.</p></div><span class="section-index">OPERATE</span></div>
+          <details open><summary>Local environment</summary><div class="detail-body"><pre><code>LLM_API_KEY=&lt;your Gemini API key&gt;
+LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+LLM_MODEL=gemini-3.8-flash
+LLM_TIMEOUT_S=180
+LLM_CONTEXT_PAGES=5
+RETRIEVAL_TOP_PAGES=5
+EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
+HF_HUB_OFFLINE=1</code></pre><p>The source defaults use Groq if no local override exists. Hugging Face offline mode and <code>local_files_only=True</code> keep embedding loads on the local model cache.</p></div></details>
+          <details><summary>Start the Streamlit UI</summary><div class="detail-body"><pre><code>python -m venv .venv
+.venv\\Scripts\\Activate.ps1
+python -m pip install -r requirements.txt
+# Optional local embeddings and OCR dependencies
+python -m pip install -r requirements-optional.txt
+streamlit run app.py</code></pre></div></details>
+          <details><summary>Run and score the public example batch</summary><div class="detail-body"><pre><code>python run_batch.py --pdf dataset\\report_A.pdf `
+  --questions dataset\\questions_with_answers.jsonl --out answers.jsonl
+python evaluate.py --answers answers.jsonl `
+  --gold dataset\\questions_with_answers.jsonl --out metrics.json</code></pre><p>With a key configured, this sends report-page text to Gemini and uses provider quota. An already ingested PDF may be reused; pass <code>--force</code> to re-ingest it.</p></div></details>
+        </section>
+
+        <section class="section" id="files" data-section>
+          <div class="section-head"><div><h2>Code map.</h2><p>Start with the orchestrators, then follow a single responsibility into its module.</p></div><span class="section-index">SOURCE</span></div>
+          <div class="table-scroll"><table class="file-table"><thead><tr><th>Path</th><th>What it owns</th></tr></thead><tbody>
+            <tr><td><a href="../app.py"><code>app.py</code></a></td><td>Streamlit layout, chat messages, source display, request trace.</td></tr>
+            <tr><td><a href="../src/services/ingest_service.py"><code>ingest_service.py</code></a></td><td>PDF ingestion orchestration, reuse by hash, progress reporting.</td></tr>
+            <tr><td><a href="../src/ingest/pdf_loader.py"><code>pdf_loader.py</code></a></td><td>Coordinate-sorted text and rendered PDF pages.</td></tr>
+            <tr><td><a href="../src/ingest/ocr.py"><code>ocr.py</code></a> · <a href="../src/ingest/table_extract.py"><code>table_extract.py</code></a></td><td>Scanned-page OCR and row/header extraction.</td></tr>
+            <tr><td><a href="../src/qa/answerer.py"><code>answerer.py</code></a></td><td>End-to-end answer sequence and abstain/fallback paths.</td></tr>
+            <tr><td><a href="../src/qa/hybrid_search.py"><code>hybrid_search.py</code></a> · <a href="../src/qa/cell_lookup.py"><code>cell_lookup.py</code></a></td><td>Candidate page retrieval and exact mapped-cell lookup.</td></tr>
+            <tr><td><a href="../src/qa/llm_client.py"><code>llm_client.py</code></a> · <a href="../src/qa/prompts.py"><code>prompts.py</code></a></td><td>Provider HTTP request, trace, JSON prompt, response parsing.</td></tr>
+            <tr><td><a href="../src/qa/validator.py"><code>validator.py</code></a> · <a href="../evaluate.py"><code>evaluate.py</code></a></td><td>Answer/page checks and gold-set scoring.</td></tr>
+            <tr><td><a href="../src/db.py"><code>db.py</code></a> · <a href="../src/config.py"><code>config.py</code></a></td><td>SQLite data access and environment-based settings.</td></tr>
+          </tbody></table></div>
+          <footer class="footer"><strong>Source basis:</strong> Report Navigator repository at HEAD <code>c697102</code>, with the local report database inspected on 2026-10-31. Ingestion counts describe that local database and may change after re-ingestion.</footer>
+        </section>
+      </article>
+    </main>
+  </div>
+  <script>
+    (() => {
+      const sections = [...document.querySelectorAll("article [data-section]")];
+      const navLinks = [...document.querySelectorAll(".toc a")];
+      const progress = document.getElementById("progress-fill");
+      const search = document.getElementById("section-search");
+      const setActive = (id) => navLinks.forEach(link => {
+        if (link.getAttribute("href") === `#${id}`) link.setAttribute("aria-current", "location");
+        else link.removeAttribute("aria-current");
+      });
+      if ("IntersectionObserver" in window) {
+        const observer = new IntersectionObserver(entries => {
+          const visible = entries.filter(entry => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+          if (visible) setActive(visible.target.id);
+        }, { rootMargin: "-18% 0px -68% 0px", threshold: [0, .15, .4] });
+        sections.forEach(section => observer.observe(section));
+      }
+      const updateProgress = () => {
+        const max = document.documentElement.scrollHeight - window.innerHeight;
+        const amount = max > 0 ? Math.min(100, Math.max(0, window.scrollY / max * 100)) : 0;
+        progress.style.width = `${amount}%`;
+      };
+      window.addEventListener("scroll", updateProgress, { passive: true });
+      window.addEventListener("resize", updateProgress);
+      updateProgress();
+
+      document.getElementById("expand-all").addEventListener("click", () => document.querySelectorAll("article details").forEach(item => item.open = true));
+      document.getElementById("collapse-all").addEventListener("click", () => document.querySelectorAll("article details").forEach(item => item.open = false));
+      document.getElementById("print-page").addEventListener("click", () => window.print());
+
+      search.addEventListener("input", () => {
+        const query = search.value.trim().toLocaleLowerCase();
+        sections.forEach(section => {
+          const visible = !query || section.innerText.toLocaleLowerCase().includes(query);
+          section.hidden = !visible;
+          navLinks.filter(link => link.getAttribute("href") === `#${section.id}`).forEach(link => link.hidden = !visible);
+        });
+        if (query) document.querySelector("article").scrollIntoView({ block: "start", behavior: "smooth" });
+      });
+      navLinks.forEach(link => link.addEventListener("click", () => {
+        const menu = document.querySelector(".mobile-nav details");
+        if (menu) menu.open = false;
+      }));
+    })();
+  </script>
+</body>
+</html>
