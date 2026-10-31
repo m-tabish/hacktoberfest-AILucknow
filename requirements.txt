@@ -1,0 +1,5 @@
+pymupdf
+streamlit
+python-dotenv
+rapidfuzz
+pandas

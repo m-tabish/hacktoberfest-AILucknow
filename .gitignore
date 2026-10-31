@@ -1,8 +1,11 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+!data/.gitkeep
+.*
+images/
 *.png
 venv
 .*
-
-dataset
-data
 images
-src

@@ -1,0 +1,9 @@
+# Optional enhancements. The system runs BM25-only without these.
+# Embeddings + vector search (falls back to BM25-only if absent)
+sentence-transformers
+faiss-cpu
+# OCR for scanned pages (also needs the system `tesseract` binary)
+pytesseract
+Pillow
+# Table-extraction cross-checks in notebooks / debugging
+pdfplumber
