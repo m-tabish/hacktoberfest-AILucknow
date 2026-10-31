@@ -31,17 +31,27 @@ def _highlight(text: str, needle: str) -> str:
 
 
 def _render_answer(ans: dict):
-    if ans["answer"] == "NOT_FOUND":
-        st.warning(f"**Not found in the report** · confidence {ans['confidence']:.2f}")
-    else:
-        st.markdown(f"## {ans['answer']}")
-        st.markdown(
-            f"📄 **Page {ans['page']}** · Confidence: {ans['confidence']:.2f} · "
-            f"Source: `{ans['source']}`"
-        )
+    submission = {
+        "id": ans["id"],
+        "answer": ans["answer"],
+        "page": None if ans["answer"] == "NOT_FOUND" else int(ans["page"]),
+        "confidence": round(float(ans["confidence"]), 2),
+    }
+    st.code(json.dumps(submission, ensure_ascii=False, allow_nan=False), language="json")
+    trace = ans.get("llm_trace") or {}
+    api_issue = None
+    for attempt in trace.get("attempts", []):
+        if attempt.get("error"):
+            api_issue = attempt["error"]
+            break
+        status = attempt.get("status")
+        if isinstance(status, int) and status >= 400:
+            api_issue = f"Gemini returned HTTP {status}."
+            break
+    if api_issue:
+        st.warning(f"LLM API issue: {api_issue}")
     if ans.get("note"):
         st.caption(ans["note"])
-    trace = ans.get("llm_trace")
     with st.expander("Gemini request and response", expanded=False):
         if trace is None:
             st.caption("No trace was saved for this earlier answer.")
@@ -143,11 +153,18 @@ tab_chat, tab_batch = st.tabs(["💬 Chat", "📋 Batch + Evaluation"])
 with tab_chat:
     if "messages" not in st.session_state:
         st.session_state["messages"] = []
+    if "chat_question_counter" not in st.session_state:
+        st.session_state["chat_question_counter"] = sum(
+            msg["role"] == "assistant" for msg in st.session_state["messages"]
+        )
+    assistant_count = 0
     for msg in st.session_state["messages"]:
         with st.chat_message(msg["role"]):
             if msg["role"] == "user":
                 st.markdown(msg["content"])
             else:
+                assistant_count += 1
+                msg["content"].setdefault("id", f"CHAT-{assistant_count:04d}")
                 _render_answer(msg["content"])
     question = st.chat_input("Ask a question about the report…")
     if question:
@@ -159,8 +176,11 @@ with tab_chat:
                 st.markdown(question)
             with st.chat_message("assistant"):
                 with st.spinner("Searching the report…"):
+                    st.session_state["chat_question_counter"] += 1
+                    qid = f"CHAT-{st.session_state['chat_question_counter']:04d}"
                     ans = chat_service.ask(doc_id, question)
                 ans_dict = {
+                    "id": qid,
                     "answer": ans.answer, "page": ans.page,
                     "confidence": ans.confidence, "source": ans.source,
                     "sources": ans.sources, "page_image": ans.page_image,
