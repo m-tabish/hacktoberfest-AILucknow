@@ -1,8 +1,8 @@
 """Deterministic cell lookup: entity row + metric column -> exact value.
 
-Only fires when table_rows carry a confidently-mapped columns_json. If several
-rows for the entity agree on one value, that value wins; if they conflict we
-return None and let retrieval + LLM decide.
+Uses mapped columns when available, with a guarded fallback for repeated
+subject-group tables whose headers could not be mapped. Conflicting values
+still defer to retrieval + LLM.
 """
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ _COLUMN_VARIANTS = {
     "injured": ["injured", "injuries", "persons_injured"],
     "accidents": ["accidents", "total_accidents", "road_accidents"],
 }
-
 
 def candidate_column_keys(metric: str | None, year: int | None) -> list:
     if not metric:

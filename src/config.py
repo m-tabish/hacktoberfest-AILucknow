@@ -64,6 +64,6 @@ PAGE_CHUNK_MAX_CHARS = 20000
 
 # --- Retrieval / answering ---
 RETRIEVAL_TOP_PAGES = int(os.environ.get("RETRIEVAL_TOP_PAGES", "5"))
-LLM_CONTEXT_PAGES = 3
+LLM_CONTEXT_PAGES = int(os.environ.get("LLM_CONTEXT_PAGES", "5"))
 ENTITY_FUZZY_THRESHOLD = 85  # RapidFuzz score
 NOT_FOUND = "NOT_FOUND"

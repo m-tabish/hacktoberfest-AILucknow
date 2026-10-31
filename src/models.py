@@ -73,6 +73,7 @@ class Answer:
     page_image: Optional[str] = None
     note: str = ""
     qid: Optional[str] = None
+    llm_trace: Optional[dict] = None
 
     def to_submission_dict(self) -> dict:
         return {

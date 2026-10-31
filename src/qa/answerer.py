@@ -48,6 +48,7 @@ def answer_question(conn, doc_id: str, question: str, qid: str | None = None) ->
             source="cell_lookup", qid=qid,
             sources=_sources_for_page(conn, doc_id, hit["page"], ctx, str(hit["value"])),
             page_image=_page_image(conn, doc_id, hit["page"]),
+            llm_trace={"status": "not_called", "reason": "Answer came from deterministic table lookup."},
         )
         db.log_qa(conn, doc_id, question, ans)
         return ans
@@ -66,6 +67,7 @@ def answer_question(conn, doc_id: str, question: str, qid: str | None = None) ->
             answer=config.NOT_FOUND, page=0, confidence=0.8, source="abstain", qid=qid,
             sources=top_chunks[:2],
             note=f"'{ctx.entity}' was searched across all pages and does not appear in this report.",
+            llm_trace={"status": "not_called", "reason": "Entity was not found in the document."},
         )
         db.log_qa(conn, doc_id, question, ans)
         return ans
@@ -78,6 +80,7 @@ def answer_question(conn, doc_id: str, question: str, qid: str | None = None) ->
             sources=top_chunks[:3],
             note=("LLM not configured (set LLM_API_KEY in .env), so the exact cell could not be "
                   f"extracted. Retrieval's top candidate page is {top_page or '—'}."),
+            llm_trace={"status": "not_called", "reason": "LLM_API_KEY is not configured."},
         )
         db.log_qa(conn, doc_id, question, ans)
         return ans
@@ -89,19 +92,25 @@ def answer_question(conn, doc_id: str, question: str, qid: str | None = None) ->
         row = db.get_page(conn, doc_id, p)
         page_texts[p] = row["raw_text"] if row else ""
     result = None
+    llm_attempts = []
     for _attempt in range(2):
+        trace = {}
         raw = llm_client.complete_json(
             prompts.SYSTEM_PROMPT,
             prompts.build_user_prompt(question, [(p, page_texts[p]) for p in use_pages]),
+            trace=trace,
         )
+        llm_attempts.append(trace)
         result = validator.validate_llm_result(raw or {}, use_pages, page_texts)
         if result:
             break
     if result is None:
+        reason = llm_client.last_error or "Gemini's answer did not match the report text or candidate pages."
         ans = Answer(
             answer=config.NOT_FOUND, page=0, confidence=0.3, source="llm_invalid", qid=qid,
             sources=top_chunks[:3],
-            note="The model did not return a validated answer from the candidate pages.",
+            note=f"Could not validate Gemini's answer: {reason}",
+            llm_trace={"status": "completed", "attempts": llm_attempts},
         )
         db.log_qa(conn, doc_id, question, ans)
         return ans
@@ -111,6 +120,7 @@ def answer_question(conn, doc_id: str, question: str, qid: str | None = None) ->
         source="llm" if result["answer"] != config.NOT_FOUND else "abstain", qid=qid,
         sources=_sources_for_page(conn, doc_id, result["page"], ctx, result["answer"]),
         page_image=_page_image(conn, doc_id, result["page"]),
+        llm_trace={"status": "completed", "attempts": llm_attempts},
     )
     db.log_qa(conn, doc_id, question, ans)
     return ans

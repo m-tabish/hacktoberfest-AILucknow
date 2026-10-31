@@ -41,6 +41,25 @@ def _render_answer(ans: dict):
         )
     if ans.get("note"):
         st.caption(ans["note"])
+    trace = ans.get("llm_trace")
+    with st.expander("Gemini request and response", expanded=False):
+        if trace is None:
+            st.caption("No trace was saved for this earlier answer.")
+        elif trace.get("status") == "not_called":
+            st.info(f"Gemini was not called: {trace.get('reason', 'no reason recorded')}")
+        else:
+            for i, attempt in enumerate(trace.get("attempts", []), start=1):
+                st.markdown(f"**Attempt {i}**")
+                st.caption(f"POST {attempt.get('endpoint', '(endpoint unavailable)')}")
+                st.markdown("Request JSON")
+                st.json(attempt.get("request", {}))
+                st.markdown(f"Response status: `{attempt.get('status', 'unknown')}`")
+                if attempt.get("response"):
+                    st.markdown("Raw response body")
+                    st.code(attempt["response"], language="json")
+                elif attempt.get("error"):
+                    st.error(attempt["error"])
+            st.caption("The API key is never included in this trace.")
     for i, src in enumerate(ans.get("sources") or []):
         with st.expander(f"View source passage {i + 1}"):
             st.markdown(_highlight(src, ans["answer"]), unsafe_allow_html=True)
@@ -145,7 +164,7 @@ with tab_chat:
                     "answer": ans.answer, "page": ans.page,
                     "confidence": ans.confidence, "source": ans.source,
                     "sources": ans.sources, "page_image": ans.page_image,
-                    "note": ans.note,
+                    "note": ans.note, "llm_trace": ans.llm_trace,
                 }
                 _render_answer(ans_dict)
                 st.session_state["messages"].append(

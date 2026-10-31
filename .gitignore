@@ -7,4 +7,4 @@ data/*
 *.db
 answers.jsonl
 .*
-images
+images/

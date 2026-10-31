@@ -46,7 +46,7 @@ def validate_llm_result(result: dict, candidate_pages: list, page_texts: dict) -
         conf = 0.5
     conf = min(max(conf, 0.0), 1.0)
     if ans == config.NOT_FOUND:
-        return {"answer": ans, "page": 0, "confidence": max(conf, 0.5)}
+        return {"answer": ans, "page": 0, "confidence": min(conf, 0.5)}
     try:
         page = int(result.get("page") or 0)
     except (TypeError, ValueError):

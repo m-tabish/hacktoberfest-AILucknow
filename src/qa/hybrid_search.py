@@ -86,7 +86,21 @@ def expanded_query_tokens(question: str, ctx) -> list:
         tokens += ctx.subject.replace("_", " ").split()
     if ctx is not None and ctx.entity_norm:
         tokens += ctx.entity_norm.split()
-    return tokens
+    # Match common singular/plural variants (e.g. wheeler/wheelers,
+    # accident/accidents) so wording differences do not hide relevant pages.
+    expanded = set(tokens)
+    for token in tokens:
+        if len(token) < 4:
+            continue
+        if token.endswith("ies") and len(token) > 4:
+            expanded.add(token[:-3] + "y")
+        elif token.endswith("s") and not token.endswith(("ss", "us", "is")):
+            expanded.add(token[:-1])
+        elif token.endswith("y"):
+            expanded.add(token[:-1] + "ies")
+        else:
+            expanded.add(token + "s")
+    return list(expanded)
 
 
 def _faiss_scores(conn, doc_id: str, question: str) -> dict:
@@ -104,7 +118,7 @@ def _faiss_scores(conn, doc_id: str, question: str) -> dict:
         index = faiss.read_index(str(idx_path))
         with open(meta_path, "rb") as f:
             chunk_ids = pickle.load(f)
-        model = SentenceTransformer(config.EMBEDDING_MODEL)
+        model = SentenceTransformer(config.EMBEDDING_MODEL, local_files_only=True)
         q = model.encode([question], normalize_embeddings=True, show_progress_bar=False)
         sims, idxs = index.search(q, min(10, len(chunk_ids)))
         return {chunk_ids[i]: float(s) for s, i in zip(sims[0], idxs[0]) if i >= 0}
@@ -197,6 +211,10 @@ def entity_present(conn, doc_id: str, entity_norm: str) -> bool:
     """True if the entity appears anywhere in the document's page text."""
     if not entity_norm:
         return False
+    # Parsed table labels are often cleaner than PDF text extraction, especially
+    # for dense city tables. Treat an exact row-label match as presence too.
+    if any(norm == entity_norm for _label, norm in db.distinct_row_labels(conn, doc_id)):
+        return True
     toks = [t for t in entity_norm.split() if len(t) >= 5]
     for _page_no, text in db.all_pages_text(conn, doc_id):
         norm_text = normalize_label(text)
