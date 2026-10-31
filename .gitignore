@@ -2,9 +2,10 @@
 __pycache__/
 *.pyc
 .venv/
-data/*
 !data/.gitkeep
-*.db
-answers.jsonl
 .*
 images/
+*.png
+venv
+.*
+images
