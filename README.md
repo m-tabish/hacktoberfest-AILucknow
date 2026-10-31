@@ -1,0 +1,1 @@
+# Project for Hack Days Hacktoberfest 2026.
