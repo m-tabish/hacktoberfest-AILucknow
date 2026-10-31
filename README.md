@@ -144,6 +144,25 @@ py evaluate.py --answers answers.jsonl --gold questions_with_answers.jsonl
 `evaluate.py` prints exact-match % and page accuracy % on the 50 gold
 questions — that is your score estimate for the hidden evaluation.
 
+**C. REST API (for judges / programmatic access):**
+```bash
+uvicorn api:app --host 0.0.0.0 --port 8000
+```
+Swagger UI at http://localhost:8000/docs (OpenAPI schema at `/openapi.json`).
+Same services as the UI; no authentication. Flow:
+1. `POST /documents` (multipart `file`) → `202` with `doc_id`; ingestion runs
+   in the background (same PDF again → `200`, reused).
+2. Poll `GET /documents/{doc_id}` until `status` is `ready`.
+3. `POST /documents/{doc_id}/ask` `{"question": "..."}` → answer, page,
+   confidence, source passages, page image URL.
+4. `POST /documents/{doc_id}/batch` `{"questions": [{"id", "question"}]}`, or
+   upload a questions `.jsonl` to `POST /documents/{doc_id}/batch/jsonl` →
+   answers in the submission format.
+
+Also: `GET /documents`, `DELETE /documents/{doc_id}`,
+`GET /documents/{doc_id}/pages/{page_no}/image`, `GET /health`.
+On macOS 14 set `EMBEDDING_DEVICE=cpu` (in `.env`) — see Troubleshooting.
+
 ### Troubleshooting
 
 | Symptom | Fix |
@@ -153,6 +172,7 @@ questions — that is your score estimate for the hidden evaluation.
 | Ingestion seems slow the first time | Normal — 272 pages are rendered + parsed once; later runs reuse `data/` and start instantly. Delete `data/` to force a fresh ingestion |
 | PowerShell: activation script blocked | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, then `.venv\Scripts\Activate.ps1` again |
 | OCR errors on scanned pages | Install the `tesseract` binary (step 2, optional) — core text pages work without it |
+| Mac crashes during ingestion with `MPSNDArray ... unrecognized selector` | macOS < 15 + recent torch: Apple-GPU embeddings crash. Add `EMBEDDING_DEVICE=cpu` to `.env` |
 
 Output format, one JSON per line:
 

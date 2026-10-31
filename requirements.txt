@@ -3,3 +3,6 @@ streamlit
 python-dotenv
 rapidfuzz
 pandas
+fastapi
+uvicorn
+python-multipart
