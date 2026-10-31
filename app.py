@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import streamlit as st
 
 from src import db
-from src.services import batch_service, chat_service, ingest_service
+from src.services import batch_service, chat_service, document_service, ingest_service
 
 st.set_page_config(page_title="Report Navigator", page_icon="📄", layout="wide")
 
@@ -96,6 +96,23 @@ with st.sidebar:
         c2.metric("OCR pages", stats["ocr_pages"])
         c1.metric("Table rows", stats["table_rows"])
         c2.metric("Chunks", stats["chunks"])
+        latest_doc = docs[0]
+        st.caption(f"Most recently parsed: {latest_doc['filename']}")
+        if st.button("Delete latest parsed document", key="delete_latest_document"):
+            try:
+                deleted = document_service.delete_document(latest_doc["doc_id"])
+            except Exception as exc:
+                st.error(f"Could not delete this document: {exc}")
+            else:
+                if deleted:
+                    for key in (
+                        "doc_id", "messages", "batch_answers", "batch_questions", "batch_gold"
+                    ):
+                        st.session_state.pop(key, None)
+                    st.success(f"Deleted {latest_doc['filename']} and its parsed context.")
+                    st.rerun()
+                else:
+                    st.warning("This document was already deleted.")
     else:
         st.info("Upload and ingest a report PDF to begin.")
 

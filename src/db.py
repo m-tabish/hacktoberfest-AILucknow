@@ -118,6 +118,13 @@ def delete_document_data(conn, doc_id: str):
     conn.commit()
 
 
+def delete_document(conn, doc_id: str) -> bool:
+    for tbl in ("qa_log", "pages", "chunks", "table_rows", "documents"):
+        conn.execute(f"DELETE FROM {tbl} WHERE doc_id=?", (doc_id,))
+    conn.commit()
+    return conn.execute("SELECT changes()").fetchone()[0] > 0
+
+
 def doc_stats(conn, doc_id: str) -> dict:
     def one(sql, args=(doc_id,)):
         r = conn.execute(sql, args).fetchone()
