@@ -50,6 +50,8 @@ LLM_TIMEOUT_S = int(os.environ.get("LLM_TIMEOUT_S", "60"))
 # --- Embeddings (optional; system runs BM25-only without them) ---
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
 ENABLE_EMBEDDINGS = os.environ.get("ENABLE_EMBEDDINGS", "1") not in ("0", "false", "False")
+# Unset = auto-detect (cuda/mps/cpu). Set to "cpu" on macOS < 15, where torch MPS crashes.
+EMBEDDING_DEVICE = os.environ.get("EMBEDDING_DEVICE") or None
 
 # --- Ingestion ---
 OCR_MIN_CHARS = 50          # pages with less native text than this are treated as scanned

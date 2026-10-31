@@ -39,15 +39,18 @@ def try_build_faiss(doc_id: str, conn, chunk_rows: list) -> bool:
     if not config.ENABLE_EMBEDDINGS:
         return False
     try:
-        import faiss
+        # torch (via sentence_transformers) must load before faiss: each ships its own
+        # libomp, and faiss-first segfaults on macOS during encode().
         from sentence_transformers import SentenceTransformer
+        import faiss
     except Exception:
         return False
     try:
         embed_rows = [r for r in chunk_rows if r["chunk_type"] in EMBED_CHUNK_TYPES]
         if not embed_rows:
             return False
-        model = SentenceTransformer(config.EMBEDDING_MODEL, local_files_only=True)
+        model = SentenceTransformer(config.EMBEDDING_MODEL, device=config.EMBEDDING_DEVICE,
+                                    local_files_only=True)
         vecs = model.encode([r["text"] for r in embed_rows],
                             normalize_embeddings=True, show_progress_bar=False)
         import numpy as np

@@ -108,8 +108,10 @@ def _faiss_scores(conn, doc_id: str, question: str) -> dict:
     if not config.ENABLE_EMBEDDINGS:
         return {}
     try:
-        import faiss
+        # torch (via sentence_transformers) must load before faiss: each ships its own
+        # libomp, and faiss-first segfaults on macOS during encode().
         from sentence_transformers import SentenceTransformer
+        import faiss
 
         idx_path = config.doc_index_dir(doc_id) / "chunks.faiss"
         meta_path = config.doc_index_dir(doc_id) / "faiss_meta.pkl"
@@ -118,7 +120,8 @@ def _faiss_scores(conn, doc_id: str, question: str) -> dict:
         index = faiss.read_index(str(idx_path))
         with open(meta_path, "rb") as f:
             chunk_ids = pickle.load(f)
-        model = SentenceTransformer(config.EMBEDDING_MODEL, local_files_only=True)
+        model = SentenceTransformer(config.EMBEDDING_MODEL, device=config.EMBEDDING_DEVICE,
+                                    local_files_only=True)
         q = model.encode([question], normalize_embeddings=True, show_progress_bar=False)
         sims, idxs = index.search(q, min(10, len(chunk_ids)))
         return {chunk_ids[i]: float(s) for s, i in zip(sims[0], idxs[0]) if i >= 0}
